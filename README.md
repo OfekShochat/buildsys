@@ -1,3 +1,2 @@
 # buildsys
-this is a pretty fast build system.
-src is a test project to build.
+this is a pretty fast build system. building my chess engine in 1 second (in src).      
