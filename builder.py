@@ -129,12 +129,16 @@ def asstr(l):
 
 a = 0
 
+def miliseconds():
+    return int((time() - st)*1000)
+
 def onecomp(f, files, rules, i, FNULL):
     global a
     filename = os.path.basename(f)[:os.path.basename(f).find(".")]
-    subprocess.check_call("cl /c /Fo./build/objs/{}.obj /O2 {} {}".format(filename, f, asstr(rules)), stdout=FNULL, stderr=FNULL)
-    print("[{}][{}/{}] compiled {}                       ".format(int((time() - st)*1000), a, len(files)+1, f), end="\r")
+    subprocess.check_call("cl /c \"/Fo./build/objs/{}.obj\" /O2 \"{}\" {}".format(filename, f, asstr(rules)), stdout=FNULL, stderr=FNULL)
+    print("[{}][{}/{}] compiled {}                       ".format(miliseconds(), a, len(files)+1, f), end="\r")
     a += 1
+    
 def comp(files, out, rules):
     threads = []
     print("[{}][?/{}] started building {}".format(int((time() - st)*1000), len(files)+1, out), end="\r")
@@ -172,6 +176,14 @@ def getRules():
     for i in open("poop.builder").readlines():
         exec(i)
     return rules
+
+def wipeobjs():
+    files = glob('build/objs/*.obj')
+    for f in files:
+        try:
+            os.unlink(f)
+        except OSError as e:
+            print("Error: %s : %s" % (f, e.strerror))
 
 def wipe():
     open("./build/build.options", "w")
@@ -219,6 +231,7 @@ def main():
 
     if "--wipe" in argv:
         wipe()
+        wipeobjs()
 
     rules = getRules()
 
@@ -256,7 +269,7 @@ def main():
             for i in hashes:
                 write += "%s:%s\2" % (i, hashes[i])
             write += "\n"
-    
+    print()
     f.write(write)
+
 main()
-print(time() - st)
