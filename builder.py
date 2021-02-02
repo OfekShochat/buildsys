@@ -26,8 +26,11 @@ import subprocess
 from threading import Thread
 from sys import argv
 
+# defaults
 directory = "src"
 name = "main.exe"
+warn_level = 2
+significants = {"C4244":2, "C4530:":0}
 
 FNULL = open(os.devnull, 'w')
 
@@ -129,19 +132,35 @@ def asstr(l):
 
 a = 0
 
+def issignificant(s):
+    a = significants
+    for i in a:
+        if i in s:
+            return a[i]
+    return -1
+
 def miliseconds():
     return int((time() - st)*1000)
 
 def onecomp(f, files, rules, i, FNULL):
     global a
     filename = os.path.basename(f)[:os.path.basename(f).find(".")]
-    subprocess.check_call("cl /c \"/Fo./build/objs/{}.obj\" /O2 \"{}\" {}".format(filename, f, asstr(rules)), stdout=FNULL, stderr=FNULL)
+    ssa = subprocess.check_output("cl /c \"/Fo./build/objs/{}.obj\" /O2 \"{}\" {} /W2".format(filename, f, asstr(rules)), stderr=FNULL).decode("utf-8")
     print("[{}][{}/{}] compiled {}                       ".format(miliseconds(), a, len(files)+1, f), end="\r")
     a += 1
-    
+    if "warning C4244" in ssa:
+        #d.write(i[i.find("warning"):i.find("\n")] + "\n")
+        ssa = ssa.split("\r\n")
+        for ss in ssa:
+            sig = issignificant(ss)
+            if sig >= warn_level:
+                print()
+                print("with(wl:%s)" % sig, ss[ss.find(": ")+2:])
+                
+                
 def comp(files, out, rules):
     threads = []
-    print("[{}][?/{}] started building {}".format(int((time() - st)*1000), len(files)+1, out), end="\r")
+    print("[{}][?/{}] started building {}".format(miliseconds(), len(files)+1, out), end="\r")
     for i in range(len(files)):
         t = Thread(target=onecomp, args=[files[i], files, rules, i, FNULL])
         t.deamon = True
@@ -149,17 +168,19 @@ def comp(files, out, rules):
         threads.append(t)
     while threads[-1].is_alive():
         pass
-
+    
     linkfiles = glob("./build/objs/*.obj")
     link = ""
     for i in linkfiles:
         link += i + " "
     print("[{}/{}] linking final {}                       ".format(len(files), len(files)+1, out), end="\r")
-    subprocess.check_output("link -OUT:{} {}".format("./build/" + out, link))
-    print("[{}/{}] final build: {}                       ".format(len(files)+1, len(files)+1, out), end="\r")
+    subprocess.check_output("link -OUT:{} {} {}".format("./build/" + out, link, asstr(linkrules))).decode("utf-8")
+    print("[{}][{}/{}] final build: {}                       ".format(miliseconds(), len(files)+1, len(files)+1, out), end="\r")
 
 def getRules():
+    global linkrules
     rules = []
+    linkrules = []
     def filedirectory(path):
         global directory
         directory = path
@@ -173,6 +194,11 @@ def getRules():
             rules.append("/I{}".format(path))
         elif compiler == "gcc":
             rules.append("-I '{}'".format(path))
+    
+    def libs(*libpaths):
+        for i in libpaths:
+            linkrules.append("/LIBPATH:\"{}\"".format(i))
+
     for i in open("poop.builder").readlines():
         exec(i)
     return rules
@@ -261,6 +287,7 @@ def main():
             previoushashes.update({d[0]:d[1]})
         if previoushashes == hashes:
             print("up to date")
+            exit(0)
         else:
             print("Detected a change")
             comp(getChanged(files, previoushashes, hashes), name, rules)

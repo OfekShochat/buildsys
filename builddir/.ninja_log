@@ -1,0 +1,10 @@
+# ninja log v5
+0	470	6338971634560025	0xA2.exe.p/src_chess_thc.cpp.obj	f22e9820e985b0c9
+5	482	6338971634700149	0xA2.exe.p/src_mcts_evaluate.cc.obj	d5e86e18a82c4c2e
+9	539	6338971635275754	0xA2.exe.p/src_mcts_Thread.cpp.obj	1261e9bd7c58057e
+12	586	6338971635726170	0xA2.exe.p/src_mcts_node.cpp.obj	89ae0d4efc98b226
+7	596	6338971635836261	0xA2.exe.p/src_uci.cpp.obj	9efea213b66fa8b3
+3	782	6338971637697952	0xA2.exe.p/src_engine.cpp.obj	d4b300101baa00c8
+14	883	6338971638688860	0xA2.exe.p/src_mcts_search.cpp.obj	2ef02dc38cebc2b0
+884	949	6338971639289400	0xA2.exe	b55ab83c0180cce9
+884	949	6338971639289400	0xA2.pdb	b55ab83c0180cce9
