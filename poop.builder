@@ -1,2 +1,3 @@
 additional_include("src")
-libs("C:\\Users\\User\\source\\repos\\Project2\\x64\\Release\\torh.lib")
+libs("D:\libtorch-win-shared-with-deps-1.6.0+cpu\libtorch\lib\c10.lib")
+libs("D:\\libtorch-win-shared-with-deps-1.6.0+cpu\\libtorch\\lib\\torch_cpu.lib", copy=True)

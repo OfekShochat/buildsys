@@ -26,9 +26,12 @@ import subprocess
 from threading import Thread
 from sys import argv
 
+supported_compilers = ["gcc", "cl"]
+
 # defaults
 directory = "src"
 name = "main.exe"
+preferedCompiler = "cl"
 warn_level = 2
 significants = {"C4244":2, "C4530:":0}
 
@@ -142,27 +145,38 @@ def issignificant(s):
 def miliseconds():
     return int((time() - st)*1000)
 
-def onecomp(f, files, rules, i, FNULL):
+def getcompiler_options(compiler):
+    if compiler == "gcc":
+        return {"speed":"-O2 ", "objOut":"-o ", "objMode":"-c", "wl2":"-pedantic", "additional_include":"-I ", "libpath":"-L "}
+    if compiler == "cl":
+        return {"speed":"/O2 ", "objOut":"/Fo", "objMode":"/c", "wl2":"/W2", "additional_include":"/I", "libpath":"/LIBPATH:"}
+
+def onecomp(f, files, rules, i, FNULL, config):
     global a
+    
     filename = os.path.basename(f)[:os.path.basename(f).find(".")]
-    ssa = subprocess.check_output("cl /c \"/Fo./build/objs/{}.obj\" /O2 \"{}\" {} /W2".format(filename, f, asstr(rules)), stderr=FNULL).decode("utf-8")
+    ssa = subprocess.check_output("{} {} \"{}./build/objs/{}.obj\" {} \"{}\" {} /W2".format(config["compiler"], config["objMode"], config["objOut"], filename, asstr(rules), f, config["speed"]), stderr=FNULL).decode("utf-8")
     print("[{}][{}/{}] compiled {}                       ".format(miliseconds(), a, len(files)+1, f), end="\r")
     a += 1
-    if "warning C4244" in ssa:
+    if "warning" in ssa or "error" in ssa:
         #d.write(i[i.find("warning"):i.find("\n")] + "\n")
         ssa = ssa.split("\r\n")
         for ss in ssa:
             sig = issignificant(ss)
             if sig >= warn_level:
                 print()
-                print("with(wl:%s)" % sig, ss[ss.find(": ")+2:])
+                print("with(wl:%s)" % sig, ss)
                 
                 
-def comp(files, out, rules):
+def comp(files, out, rules, compiler):
     threads = []
+
+    config = {"compiler":compiler}
+    config.update(getcompiler_options(compiler))
+
     print("[{}][?/{}] started building {}".format(miliseconds(), len(files)+1, out), end="\r")
     for i in range(len(files)):
-        t = Thread(target=onecomp, args=[files[i], files, rules, i, FNULL])
+        t = Thread(target=onecomp, args=[files[i], files, rules, i, FNULL, config])
         t.deamon = True
         t.start()
         threads.append(t)
@@ -177,10 +191,13 @@ def comp(files, out, rules):
     subprocess.check_output("link -OUT:{} {} {}".format("./build/" + out, link, asstr(linkrules))).decode("utf-8")
     print("[{}][{}/{}] final build: {}                       ".format(miliseconds(), len(files)+1, len(files)+1, out), end="\r")
 
-def getRules():
+def getRules(compiler):
     global linkrules
     rules = []
     linkrules = []
+
+    options = getcompiler_options(compiler)
+
     def filedirectory(path):
         global directory
         directory = path
@@ -189,15 +206,23 @@ def getRules():
         global name
         name = exename
 
-    def additional_include(path, compiler="cl"):
+    def additional_include(path):
         if compiler == "cl":
             rules.append("/I{}".format(path))
         elif compiler == "gcc":
             rules.append("-I '{}'".format(path))
     
-    def libs(*libpaths):
+    def libs(*libpaths, copy=True):
+        from shutil import copy
+        import ntpath
+
         for i in libpaths:
             linkrules.append("/LIBPATH:\"{}\"".format(i))
+            filename, file_extension = os.path.splitext(i)
+            if copy and not os.path.exists("./build/{}.dll".format(ntpath.basename(i)[:ntpath.basename(i).find(".")])) and os.path.exists(filename + ".dll"):
+                print("copying...")
+                Thread(target=copy, args=[filename + ".dll", "./build/{}.dll".format(ntpath.basename(i)[:ntpath.basename(i).find(".")])])
+                copy(filename + ".dll", "./build/{}.dll".format(ntpath.basename(i)[:ntpath.basename(i).find(".")]))
 
     for i in open("poop.builder").readlines():
         exec(i)
@@ -230,36 +255,29 @@ def getChanged(files, previoushashes, hashes):
             changedFiles.append(i)
     return changedFiles
 
-def cc_compiler_test(): # getCompiler()
-
-    """
+def getCompiler():
     try:
         subprocess.check_call(preferedCompiler, stderr=FNULL, stdout=FNULL)
+        return preferedCompiler
     except:
-        info("[info] prefered compiler({}) is not available.".format(preferedCompiler))
-        for i in supported_compilers
+        print(WARNING + "[info] prefered compiler({}) is not available.".format(preferedCompiler) + RESET)
+        supported_compilers_wo = supported_compilers
+        supported_compilers_wo.remove(preferedCompiler)
+        for i in supported_compilers_wo:
             try:
                 subprocess.check_call(i, stderr=FNULL, stdout=FNULL)
-                break
+                return i
             except FileNotFoundError:
-                info("[info] {} is not available.".format(i))
-    return i
-    """
-    try:
-        subprocess.check_call("cl", stderr=FNULL, stdout=FNULL)
-    except FileNotFoundError:
-        print("0x2E7" + FAIL + "[ERROR] " + RESET + "cl was not found.")
-        exit(1)
+                print(WARNING + "[info] {} is not available.".format(i) + RESET)
 
 def main():
-
-    cc_compiler_test()
+    compiler = getCompiler()
 
     if "--wipe" in argv:
         wipe()
         wipeobjs()
 
-    rules = getRules()
+    rules = getRules(compiler)
 
     if not os.path.isdir("build"): os.mkdir("build")
     if not os.path.isdir("build/objs"): os.mkdir("build/objs")
@@ -279,7 +297,7 @@ def main():
         for i in hashes:
             write += "%s:%s\2" % (i, hashes[i])
         write += "\n"
-        comp(files, name, rules)
+        comp(files, name, rules, compiler)
     else:
         previoushashes = {}
         for i in r[0].split("\2")[:-1]:
@@ -290,7 +308,7 @@ def main():
             exit(0)
         else:
             print("Detected a change")
-            comp(getChanged(files, previoushashes, hashes), name, rules)
+            comp(getChanged(files, previoushashes, hashes), name, rules, compiler)
             hashes = getHashes(files)
             wipe()
             for i in hashes:
